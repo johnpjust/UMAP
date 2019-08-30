@@ -1,7 +1,6 @@
 import umap
 import struct
 import numpy as np
-import cv2
 import matplotlib.pyplot as plt
 
 fnames_data = ['data/MNIST/train-images.idx3-ubyte', 'data/MNIST/t10k-images.idx3-ubyte', 'data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
