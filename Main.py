@@ -2,9 +2,15 @@ import umap
 import struct
 import numpy as np
 import matplotlib.pyplot as plt
+import r_pca
+import sklearn
+import scipy.io
+import pickle
+import glob
 
-fnames_data = ['data/MNIST/train-images.idx3-ubyte', 'data/MNIST/t10k-images.idx3-ubyte', 'data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
-fnames_labels = ['data/MNIST/train-labels.idx1-ubyte', 'data/MNIST/t10k-labels.idx1-ubyte', 'data/FasionMNIST/train-labels-idx1-ubyte', 'data/FasionMNIST/t10k-labels-idx1-ubyte']
+## MNIST vs fashion MNIST
+fnames_data = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
+fnames_labels = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-labels-idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-labels-idx1-ubyte']
 
 def read_idx(filename):
     with open(filename, 'rb') as f:
@@ -43,3 +49,30 @@ ax.legend()
 plt.show()
 
 np.savetxt(r'fitted_embeddings/nn10_md0.1_corr.csv', np.concatenate([embedding, np.expand_dims(labels,axis=1)],axis=1), delimiter=',')
+
+# data_ = data[np.arange(0,data.shape[0], 10)]
+# data_=(data_ - data_.mean(axis=0))/data_.std(axis=0)
+# ## robust PCA
+# rpca = r_pca.R_pca((data_ - data_.mean(axis=0))/data_.std(axis=0))
+# L, S = rpca.fit(max_iter=10000, iter_print=100)
+# plt.figure();plt.scatter(L[:,0], L[:,1])
+# plt.figure();plt.scatter(S[:,0], S[:,1])
+# rpca.plot_fit([2,2])
+# plt.show()
+
+arr = np.arange(data.shape[0])
+np.random.shuffle(arr)
+data = data[arr,]
+labels = labels[arr]
+pca=sklearn.decomposition.PCA(n_components=10)
+pca.fit(data)
+temp = pca.transform(data)
+# plt.figure();plt.scatter(temp[:,0], temp[:,1])
+
+np.savetxt(r'C:\Users\just\Desktop\MNIST_Fashion_PCA.csv', np.concatenate([temp,np.expand_dims(labels,axis=1)], axis=1), delimiter=',')
+
+fnames_cifar = glob.glob(r'C:\Users\just\Downloads\cifar-10-python.tar\cifar-10-python\cifar-10-batches-py\train')
+## CIFAR10 vs SVHN
+cifar10=[np.load(f, allow_pickle=True, encoding='latin1') for f in fnames_cifar]
+
+mat = scipy.io.loadmat('file.mat')
