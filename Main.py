@@ -8,7 +8,7 @@ import scipy.io
 import pickle
 import glob
 
-## MNIST vs fashion MNIST
+############################## MNIST vs fashion MNIST #############################################
 fnames_data = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
 fnames_labels = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-labels-idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-labels-idx1-ubyte']
 
@@ -71,8 +71,10 @@ temp = pca.transform(data)
 
 np.savetxt(r'C:\Users\just\Desktop\MNIST_Fashion_PCA.csv', np.concatenate([temp,np.expand_dims(labels,axis=1)], axis=1), delimiter=',')
 
-fnames_cifar = glob.glob(r'C:\Users\just\Downloads\cifar-10-python.tar\cifar-10-python\cifar-10-batches-py\train')
-## CIFAR10 vs SVHN
+########################### CIFAR10 vs SVHN ##################################################
+fnames_cifar = glob.glob(r'C:\Users\just\Downloads\public_datasets\cifar-10-python\cifar-10-batches-py\train\*')
 cifar10=[np.load(f, allow_pickle=True, encoding='latin1') for f in fnames_cifar]
+cifardata = np.concatenate([a['data'] for a in cifar10])
 
-mat = scipy.io.loadmat('file.mat')
+
+svhn = scipy.io.loadmat(r'C:\Users\just\Downloads\public_datasets\SVHN.mat.mat')
