@@ -28,13 +28,22 @@ def load_dataset(args):
     np.random.seed(args.manualSeed)
     random.seed(args.manualSeed)
 
-    fnames_data = ['data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
+    if args.train:
+        fnames_data = ['data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
+        data_train = read_idx(fnames_data[0])
+        data_train = data_train.reshape((data_train.shape[0], -1))/128 - 1
 
-    data_train = read_idx(fnames_data[0])
-    data_train = data_train.reshape((data_train.shape[0], -1))/128 - 1
-
-    data_val = read_idx(fnames_data[1])
-    data_val = data_val.reshape((data_val.shape[0], -1))/128 - 1
+        data_val = read_idx(fnames_data[1])
+        data_val = data_val.reshape((data_val.shape[0], -1))/128 - 1
+    else:
+        fnames_data = ['data/MNIST/train-images.idx3-ubyte', 'data/MNIST/t10k-images.idx3-ubyte', 'data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
+        data = []
+        for f in fnames_data:
+            data.append(read_idx(f))
+        data = np.concatenate(data)
+        data = data.reshape((data.shape[0], -1))/128 - 1
+        data_train = data
+        data_val = []
 
     dataset_train = tf.data.Dataset.from_tensor_slices(tf.constant(data_train, dtype=tf.float32))#.float().to(args.device)
     dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).map(img_preprocessing, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
@@ -224,7 +233,7 @@ def main():
     args.hidden_dim = 12
     args.residual = 'gated'
     args.expname = ''
-    args.load = ''#r'C:\Users\justjo\PycharmProjects\BNAF_tensorflow_eager\checkpoint\corn_layers1_h12_flows6_resize0.25_boxsize0.1_gated_2019-08-24-11-07-09'
+    args.load = r'checkpoint/corn_layers1_h12_flows6_gated_2019-08-30-00-33-49'
     args.save = True
     args.tensorboard = 'tensorboard'
     args.early_stopping = 15
@@ -237,6 +246,7 @@ def main():
     args.momentum = 0.9 ## batch norm momentum
     args.prefetch_size = 1 #data pipeline prefetch buffer size
     args.parallel = 16 #data pipeline parallel processes
+    args.train=False
 
     args.path = os.path.join('checkpoint', '{}{}_layers{}_h{}_flows{}{}_{}'.format(
         args.expname + ('_' if args.expname != '' else ''),
