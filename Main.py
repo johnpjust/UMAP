@@ -75,6 +75,31 @@ np.savetxt(r'C:\Users\just\Desktop\MNIST_Fashion_PCA.csv', np.concatenate([temp,
 fnames_cifar = glob.glob(r'C:\Users\just\Downloads\public_datasets\cifar-10-python\cifar-10-batches-py\train\*')
 cifar10=[np.load(f, allow_pickle=True, encoding='latin1') for f in fnames_cifar]
 cifardata = np.concatenate([a['data'] for a in cifar10])
+cifarlabels = np.expand_dims(np.concatenate([a['labels'] for a in cifar10]), axis=1)
 
+svhn = scipy.io.loadmat(r'C:\Users\just\Downloads\public_datasets\SVHN.mat')
+svhndata = np.moveaxis(svhn['X'],3,0)
+svhndata = np.reshape(svhndata, (svhndata.shape[0],-1))
+# svhnlabels = svhn['y']
 
-svhn = scipy.io.loadmat(r'C:\Users\just\Downloads\public_datasets\SVHN.mat.mat')
+data = np.concatenate([cifardata, svhndata], axis=0)
+labels = np.concatenate([cifarlabels, svhn['y']+10], axis=0)
+
+arr = np.arange(data.shape[0])
+np.random.shuffle(arr)
+data = data[arr,]
+labels = labels[arr]
+
+## UMAP
+embedding = umap.UMAP(n_neighbors=10,
+                      min_dist=0.1,
+                      metric='correlation').fit_transform(data)
+
+np.savetxt(r'C:\Users\just\Desktop\cifar_svhn_UMAP_embeddings.csv', np.concatenate([embedding,labels], axis=1), delimiter=',')
+
+## PCA
+pca=sklearn.decomposition.PCA(n_components=10)
+pca.fit(data)
+temp = pca.transform(data)
+
+np.savetxt(r'C:\Users\just\Desktop\cifar_svhn_PCA.csv', np.concatenate([temp,labels], axis=1), delimiter=',')
