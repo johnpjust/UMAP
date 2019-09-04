@@ -11,6 +11,8 @@ import glob
 import random
 import struct
 import functools
+import sklearn.decomposition
+import scipy.stats
 
 
 def read_idx(filename):
@@ -18,6 +20,54 @@ def read_idx(filename):
         zero, data_type, dims = struct.unpack('>HBB', f.read(4))
         shape = tuple(struct.unpack('>I', f.read(4))[0] for d in range(dims))
         return np.fromstring(f.read(), dtype=np.uint8).reshape(shape)
+
+
+def load_data_wPCA():
+    fnames_data = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-images.idx3-ubyte',
+                   r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte',
+                   r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte',
+                   r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
+    # fnames_labels = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-labels.idx1-ubyte',
+    #                  r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-labels.idx1-ubyte',
+    #                  r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-labels-idx1-ubyte',
+    #                  r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/t10k-labels-idx1-ubyte']
+
+    data = []
+    for f in fnames_data:
+        data.append(read_idx(f))
+    data = np.concatenate(data)
+    data = data.reshape((data.shape[0], -1))
+
+    # labels = []
+    # for f in fnames_labels:
+    #     labels.append(read_idx(f))
+    # labels[2] = labels[2] + 10
+    # labels[3] = labels[3] + 10
+    # labels = np.concatenate(labels)
+
+    fmnist_data = data[-70000:,:]
+    # fmnist_labels = labels[-70000:]
+    m = np.mean(fmnist_data)
+    s = np.std(fmnist_data)
+    arr = np.arange(fmnist_data.shape[0])
+    np.random.shuffle(arr)
+    fmnist_data = (fmnist_data[arr,] - m) / s
+    pca = sklearn.decomposition.PCA(n_components=fmnist_data.shape[1])
+    pca.fit(data)
+
+    datatrain = pca.transform(fmnist_data)
+    mpca = np.mean(datatrain, axis=0)
+    spca = np.std(datatrain, axis=0)
+
+    datatrain = (datatrain-mpca)/spca
+    # dist = scipy.stats.johnsonsu.fit(np.random.choice(np.concatenate(datatrain), size=1000000, replace=False))
+
+    if args.johnsonsu:
+        dist = (-0.001832479991053192, 1.4168126381734334, -0.0031200079512223155, 1.0809622235738585) ##1MM samples
+        datatrain = np.arcsinh((datatrain - dist[-2]) / dist[-1]) * dist[1] + dist[0]
+
+    return pca.transform((data-m)/s), datatrain
+
 
 def img_preprocessing(img):
     return tf.minimum(tf.maximum(img + tf.random.uniform(img.shape, -0.00390625, 0.00390625),-1), 1) ## add noise
@@ -28,13 +78,18 @@ def load_dataset(args):
     np.random.seed(args.manualSeed)
     random.seed(args.manualSeed)
 
-    if args.train:
+    if args.train == 'pca':
+        data_test, data_train = load_data_wPCA()
+        data_val = data_train[-10000:,]
+        data_train = data_train[:-10000,:]
+    elif args.train == 'train':
         fnames_data = ['data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
         data_train = read_idx(fnames_data[0])
         data_train = data_train.reshape((data_train.shape[0], -1))/128 - 1
 
         data_val = read_idx(fnames_data[1])
         data_val = data_val.reshape((data_val.shape[0], -1))/128 - 1
+        data_test = []
     else:
         fnames_data = ['data/MNIST/train-images.idx3-ubyte', 'data/MNIST/t10k-images.idx3-ubyte', 'data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
         data = []
@@ -44,14 +99,17 @@ def load_dataset(args):
         data = data.reshape((data.shape[0], -1))/128 - 1
         data_train = data
         data_val = []
+        data_test = []
 
     dataset_train = tf.data.Dataset.from_tensor_slices(tf.constant(data_train, dtype=tf.float32))#.float().to(args.device)
-    dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).map(img_preprocessing, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    # dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).map(img_preprocessing, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
 
     dataset_valid = tf.data.Dataset.from_tensor_slices(tf.constant(data_val, dtype=tf.float32))#.float().to(args.device)
-    dataset_valid = dataset_valid.map(img_preprocessing, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    # dataset_valid = dataset_valid.map(img_preprocessing, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    dataset_valid = dataset_valid.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
 
-    dataset_test = tf.data.Dataset.from_tensor_slices(tf.constant(data_val, dtype=tf.float32))#.float().to(args.device)
+    dataset_test = tf.data.Dataset.from_tensor_slices(tf.constant(data_test, dtype=tf.float32))#.float().to(args.device)
     dataset_test = dataset_test.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
 
     args.n_dims = data_train.shape[1]
@@ -233,7 +291,7 @@ def main():
     args.hidden_dim = 12
     args.residual = 'gated'
     args.expname = ''
-    args.load = r'checkpoint/corn_layers1_h12_flows6_gated_2019-08-30-00-33-49'
+    args.load = r'checkpoint/corn_layers1_h12_flows6_gated_2019-09-01-23-59-14'
     args.save = True
     args.tensorboard = 'tensorboard'
     args.early_stopping = 15
@@ -241,12 +299,12 @@ def main():
     args.factr = 1E1
     args.regL2 = -1
     args.regL1 = -1
-    args.manualSeed = None
-    args.manualSeedw = None
+    args.manualSeed = 1
+    args.manualSeedw = 1
     args.momentum = 0.9 ## batch norm momentum
     args.prefetch_size = 1 #data pipeline prefetch buffer size
     args.parallel = 16 #data pipeline parallel processes
-    args.train=False
+    args.train='pca' #'train'
 
     args.path = os.path.join('checkpoint', '{}{}_layers{}_h{}_flows{}{}_{}'.format(
         args.expname + ('_' if args.expname != '' else ''),

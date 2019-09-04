@@ -7,10 +7,11 @@ import sklearn
 import scipy.io
 import pickle
 import glob
+import scipy.stats
 
 ############################## MNIST vs fashion MNIST #############################################
-fnames_data = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
-fnames_labels = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-labels-idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-labels-idx1-ubyte']
+fnames_data = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-images.idx3-ubyte', r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
+fnames_labels = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-labels.idx1-ubyte', r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-labels.idx1-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-labels-idx1-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/t10k-labels-idx1-ubyte']
 
 def read_idx(filename):
     with open(filename, 'rb') as f:
@@ -59,12 +60,13 @@ np.savetxt(r'fitted_embeddings/nn10_md0.1_corr.csv', np.concatenate([embedding, 
 # plt.figure();plt.scatter(S[:,0], S[:,1])
 # rpca.plot_fit([2,2])
 # plt.show()
-
+m = np.mean(data)
+s = np.std(data)
 arr = np.arange(data.shape[0])
 np.random.shuffle(arr)
-data = data[arr,]
+data = (data[arr,] - m)/s
 labels = labels[arr]
-pca=sklearn.decomposition.PCA(n_components=10)
+pca=sklearn.decomposition.PCA(n_components=data.shape[1])
 pca.fit(data)
 temp = pca.transform(data)
 # plt.figure();plt.scatter(temp[:,0], temp[:,1])
