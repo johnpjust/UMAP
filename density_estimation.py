@@ -22,7 +22,7 @@ def read_idx(filename):
         return np.fromstring(f.read(), dtype=np.uint8).reshape(shape)
 
 
-def load_data_wPCA():
+def load_data_wPCA(args):
     fnames_data = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-images.idx3-ubyte',
                    r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte',
                    r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte',
@@ -53,6 +53,7 @@ def load_data_wPCA():
     np.random.shuffle(arr)
     fmnist_data = (fmnist_data[arr,] - m) / s
     pca = sklearn.decomposition.PCA(n_components=fmnist_data.shape[1])
+    # pca = sklearn.decomposition.PCA(n_components=args.n_comp_pca)
     pca.fit(data)
 
     datatrain = pca.transform(fmnist_data)
@@ -61,16 +62,22 @@ def load_data_wPCA():
 
     datatrain = (datatrain-mpca)/spca
     # dist = scipy.stats.johnsonsu.fit(np.random.choice(np.concatenate(datatrain), size=1000000, replace=False))
+    data_all = pca.transform((data-m)/s)
+    data_all = (data_all - mpca)/spca
 
     if args.johnsonsu:
         dist = (-0.001832479991053192, 1.4168126381734334, -0.0031200079512223155, 1.0809622235738585) ##1MM samples
         datatrain = np.arcsinh((datatrain - dist[-2]) / dist[-1]) * dist[1] + dist[0]
+        data_all = np.arcsinh((data_all - dist[-2]) / dist[-1]) * dist[1] + dist[0]
 
-    return pca.transform((data-m)/s), datatrain
+    return data_all, datatrain
 
 
 def img_preprocessing(img):
     return tf.minimum(tf.maximum(img + tf.random.uniform(img.shape, -0.00390625, 0.00390625),-1), 1) ## add noise
+
+def img_preprocessing2(img, args):
+    return img + tf.random.normal(img.shape, 0, 0.005) ## add noise -- based on stdev of 1 for all features
 
 def load_dataset(args):
 
@@ -79,7 +86,7 @@ def load_dataset(args):
     random.seed(args.manualSeed)
 
     if args.train == 'pca':
-        data_test, data_train = load_data_wPCA()
+        data_test, data_train = load_data_wPCA(args)
         data_val = data_train[-10000:,]
         data_train = data_train[:-10000,:]
     elif args.train == 'train':
@@ -101,13 +108,18 @@ def load_dataset(args):
         data_val = []
         data_test = []
 
+    if args.add_noise:
+        img_preprocessing_ = lambda x: img_preprocessing2(x, args)
+    else:
+        img_preprocessing_ = img_preprocessing
+
     dataset_train = tf.data.Dataset.from_tensor_slices(tf.constant(data_train, dtype=tf.float32))#.float().to(args.device)
-    # dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).map(img_preprocessing, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
-    dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).map(img_preprocessing_, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    # dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
 
     dataset_valid = tf.data.Dataset.from_tensor_slices(tf.constant(data_val, dtype=tf.float32))#.float().to(args.device)
-    # dataset_valid = dataset_valid.map(img_preprocessing, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
-    dataset_valid = dataset_valid.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    dataset_valid = dataset_valid.map(img_preprocessing_, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    # dataset_valid = dataset_valid.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
 
     dataset_test = tf.data.Dataset.from_tensor_slices(tf.constant(data_test, dtype=tf.float32))#.float().to(args.device)
     dataset_test = dataset_test.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
@@ -291,7 +303,7 @@ def main():
     args.hidden_dim = 12
     args.residual = 'gated'
     args.expname = ''
-    args.load = r'checkpoint/corn_layers1_h12_flows6_gated_2019-09-01-23-59-14'
+    args.load = ''#r'checkpoint/corn_layers1_h12_flows6_gated_2019-09-01-23-59-14'
     args.save = True
     args.tensorboard = 'tensorboard'
     args.early_stopping = 15
@@ -305,6 +317,9 @@ def main():
     args.prefetch_size = 1 #data pipeline prefetch buffer size
     args.parallel = 16 #data pipeline parallel processes
     args.train='pca' #'train'
+    args.johnsonsu = True
+    args.n_comp_pca = 100
+    args.add_noise = True
 
     args.path = os.path.join('checkpoint', '{}{}_layers{}_h{}_flows{}{}_{}'.format(
         args.expname + ('_' if args.expname != '' else ''),
