@@ -52,8 +52,8 @@ def load_data_wPCA(args):
     arr = np.arange(fmnist_data.shape[0])
     np.random.shuffle(arr)
     fmnist_data = (fmnist_data[arr,] - m) / s
-    pca = sklearn.decomposition.PCA(n_components=fmnist_data.shape[1])
-    # pca = sklearn.decomposition.PCA(n_components=args.n_comp_pca)
+    # pca = sklearn.decomposition.PCA(n_components=fmnist_data.shape[1])
+    pca = sklearn.decomposition.PCA(n_components=args.n_comp_pca)
     pca.fit(data)
 
     datatrain = pca.transform(fmnist_data)
@@ -76,7 +76,8 @@ def load_data_wPCA(args):
 def img_preprocessing(img):
     return tf.minimum(tf.maximum(img + tf.random.uniform(img.shape, -0.00390625, 0.00390625),-1), 1) ## add noise
 
-def img_preprocessing2(img, args):
+def img_preprocessing2(img):
+    tf.random.set_seed(None)
     return img + tf.random.normal(img.shape, 0, 0.005) ## add noise -- based on stdev of 1 for all features
 
 def load_dataset(args):
@@ -90,13 +91,17 @@ def load_dataset(args):
         data_val = data_train[-10000:,]
         data_train = data_train[:-10000,:]
     elif args.train == 'train':
-        fnames_data = ['data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
+        fnames_data = [r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte',
+                   r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
+        fnames_test = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-images.idx3-ubyte',
+                   r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte']
         data_train = read_idx(fnames_data[0])
         data_train = data_train.reshape((data_train.shape[0], -1))/128 - 1
 
         data_val = read_idx(fnames_data[1])
         data_val = data_val.reshape((data_val.shape[0], -1))/128 - 1
-        data_test = []
+        data_test = np.concatenate([read_idx(fnames_test[0]), read_idx(fnames_test[1])])
+        data_test = data_test.reshape((data_test.shape[0], -1)) / 128 - 1
     else:
         fnames_data = ['data/MNIST/train-images.idx3-ubyte', 'data/MNIST/t10k-images.idx3-ubyte', 'data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
         data = []
@@ -109,17 +114,17 @@ def load_dataset(args):
         data_test = []
 
     if args.add_noise:
-        img_preprocessing_ = lambda x: img_preprocessing2(x, args)
+        img_preprocessing_ = img_preprocessing2
     else:
         img_preprocessing_ = img_preprocessing
 
     dataset_train = tf.data.Dataset.from_tensor_slices(tf.constant(data_train, dtype=tf.float32))#.float().to(args.device)
-    dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).map(img_preprocessing_, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
-    # dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    # dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).map(img_preprocessing_, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    dataset_train = dataset_train.shuffle(buffer_size=data_train.shape[0]).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
 
     dataset_valid = tf.data.Dataset.from_tensor_slices(tf.constant(data_val, dtype=tf.float32))#.float().to(args.device)
-    dataset_valid = dataset_valid.map(img_preprocessing_, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
-    # dataset_valid = dataset_valid.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    # dataset_valid = dataset_valid.map(img_preprocessing_, num_parallel_calls=args.parallel).batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
+    dataset_valid = dataset_valid.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
 
     dataset_test = tf.data.Dataset.from_tensor_slices(tf.constant(data_test, dtype=tf.float32))#.float().to(args.device)
     dataset_test = dataset_test.batch(batch_size=args.batch_dim).prefetch(buffer_size=args.prefetch_size)
@@ -216,7 +221,7 @@ def train(model, optimizer, scheduler, data_loader_train, data_loader_valid, dat
         
         for x_mb in data_loader_train:
             with tf.GradientTape() as tape:
-                loss = - tf.reduce_mean(compute_log_p_x(model, x_mb)/args.n_dims) #negative -> minimize to maximize liklihood
+                loss = - tf.reduce_mean(compute_log_p_x(model, x_mb)/args.n_dims) # + args.regL2*tf.sqrt(tf.reduce_sum([tf.reduce_sum(tf.square(x)) for x in model.trainable_weights])) #negative -> minimize to maximize liklihood
                 # loss = -tfp.stats.percentile(compute_log_p_x(model, x_mb), 50)
             grads = tape.gradient(loss, model.trainable_variables)
             grads = [None if grad is None else tf.clip_by_norm(grad, clip_norm=args.clip_norm) for grad in grads]
@@ -230,6 +235,7 @@ def train(model, optimizer, scheduler, data_loader_train, data_loader_valid, dat
         train_loss = np.mean(train_loss)
         # train_loss = np.median(train_loss)
         validation_loss = - tf.reduce_mean([tf.reduce_mean(compute_log_p_x(model, x_mb)/args.n_dims) for x_mb in data_loader_valid])
+        test_loss = - tf.reduce_mean([tf.reduce_mean(compute_log_p_x(model, x_mb) / args.n_dims) for x_mb in data_loader_test])
         # validation_loss = - np.median([np.median(compute_log_p_x(model, x_mb)) for x_mb in data_loader_valid])
 
 
@@ -243,6 +249,7 @@ def train(model, optimizer, scheduler, data_loader_train, data_loader_valid, dat
         if args.tensorboard:
             tf.summary.scalar('loss/validation', validation_loss,tf.compat.v1.train.get_global_step())
             tf.summary.scalar('loss/train', train_loss, tf.compat.v1.train.get_global_step())
+            tf.summary.scalar('loss/test', test_loss, tf.compat.v1.train.get_global_step())
 
 
         if stop:
@@ -289,9 +296,9 @@ def main():
 
     args = parser_()
     args.device = '/gpu:0'  # '/gpu:0'
-    args.dataset = 'corn' #'gq_ms_wheat_johnson'#'gq_ms_wheat_johnson' #['gas', 'bsds300', 'hepmass', 'miniboone', 'power']
+    args.dataset = 'corn'  # 'gq_ms_wheat_johnson'#'gq_ms_wheat_johnson' #['gas', 'bsds300', 'hepmass', 'miniboone', 'power']
     args.learning_rate = np.float32(1e-2)
-    args.batch_dim = 1000
+    args.batch_dim = 100
     args.clip_norm = 0.1
     args.epochs = 5000
     args.patience = 10
@@ -303,22 +310,22 @@ def main():
     args.hidden_dim = 12
     args.residual = 'gated'
     args.expname = ''
-    args.load = ''#r'checkpoint/corn_layers1_h12_flows6_gated_2019-09-01-23-59-14'
+    args.load = ''#r'checkpoint/corn_layers1_h12_flows6_gated_2019-09-05-00-08-31'
     args.save = True
     args.tensorboard = 'tensorboard'
     args.early_stopping = 15
     args.maxiter = 5000
     args.factr = 1E1
-    args.regL2 = -1
+    args.regL2 = 0.0001
     args.regL1 = -1
-    args.manualSeed = 1
-    args.manualSeedw = 1
-    args.momentum = 0.9 ## batch norm momentum
-    args.prefetch_size = 1 #data pipeline prefetch buffer size
-    args.parallel = 16 #data pipeline parallel processes
-    args.train='pca' #'train'
+    args.manualSeed = None
+    args.manualSeedw = None
+    args.momentum = 0.9  ## batch norm momentum
+    args.prefetch_size = 1  # data pipeline prefetch buffer size
+    args.parallel = 16  # data pipeline parallel processes
+    args.train = 'train'  # 'train'
     args.johnsonsu = True
-    args.n_comp_pca = 100
+    args.n_comp_pca = 350
     args.add_noise = True
 
     args.path = os.path.join('checkpoint', '{}{}_layers{}_h{}_flows{}{}_{}'.format(
@@ -335,7 +342,7 @@ def main():
         os.mkdir(args.path)
         with open(os.path.join(args.path, 'args.json'), 'w') as f:
             json.dump(str(args.__dict__), f, indent=4, sort_keys=True)
-    
+
     print('Creating BNAF model..')
     with tf.device(args.device):
         model = create_model(args, verbose=True)
@@ -348,6 +355,7 @@ def main():
     ## tensorboard and saving
     writer = tf.summary.create_file_writer(os.path.join(args.tensorboard, args.load or args.path))
     writer.set_as_default()
+
     tf.compat.v1.train.get_or_create_global_step()
 
     global_step = tf.compat.v1.train.get_global_step()
@@ -368,11 +376,10 @@ def main():
 
     print('Creating scheduler..')
     # use baseline to avoid saving early on
-    scheduler = EarlyStopping(model=model, patience=args.early_stopping, args = args, root = root)
+    scheduler = EarlyStopping(model=model, patience=args.early_stopping, args=args, root=root)
 
     with tf.device(args.device):
         train(model, optimizer, scheduler, data_loader_train, data_loader_valid, data_loader_test, args)
-
 
 if __name__ == '__main__':
     main()
