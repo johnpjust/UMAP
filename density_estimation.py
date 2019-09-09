@@ -13,7 +13,7 @@ import struct
 import functools
 import sklearn.decomposition
 import scipy.stats
-
+import scipy
 
 def read_idx(filename):
     with open(filename, 'rb') as f:
@@ -102,6 +102,13 @@ def load_dataset(args):
         data_val = data_val.reshape((data_val.shape[0], -1))/128 - 1
         data_test = np.concatenate([read_idx(fnames_test[0]), read_idx(fnames_test[1])])
         data_test = data_test.reshape((data_test.shape[0], -1)) / 128 - 1
+
+        if args.svd:
+            _, _, vh = scipy.linalg.svd(data_train, full_matrices=False)
+            data_train = np.matmul(data_train, vh.T)[:,:args.n_comp_pca]
+            data_val = np.matmul(data_val, vh.T)[:,:args.n_comp_pca]
+            data_test = np.matmul(data_test, vh.T)[:,:args.n_comp_pca]
+        ### _,_,vh = scipy.linalg.svd()
     else:
         fnames_data = ['data/MNIST/train-images.idx3-ubyte', 'data/MNIST/t10k-images.idx3-ubyte', 'data/FasionMNIST/train-images-idx3-ubyte', 'data/FasionMNIST/t10k-images-idx3-ubyte']
         data = []
@@ -298,7 +305,7 @@ def main():
     args.device = '/gpu:0'  # '/gpu:0'
     args.dataset = 'corn'  # 'gq_ms_wheat_johnson'#'gq_ms_wheat_johnson' #['gas', 'bsds300', 'hepmass', 'miniboone', 'power']
     args.learning_rate = np.float32(1e-2)
-    args.batch_dim = 100
+    args.batch_dim = 1000
     args.clip_norm = 0.1
     args.epochs = 5000
     args.patience = 10
@@ -310,7 +317,7 @@ def main():
     args.hidden_dim = 12
     args.residual = 'gated'
     args.expname = ''
-    args.load = ''#r'checkpoint/corn_layers1_h12_flows6_gated_2019-09-05-00-08-31'
+    args.load = r'checkpoint/corn_layers1_h12_flows6_gated_2019-09-08-02-21-47'
     args.save = True
     args.tensorboard = 'tensorboard'
     args.early_stopping = 15
@@ -323,10 +330,11 @@ def main():
     args.momentum = 0.9  ## batch norm momentum
     args.prefetch_size = 1  # data pipeline prefetch buffer size
     args.parallel = 16  # data pipeline parallel processes
-    args.train = 'train'  # 'train'
-    args.johnsonsu = True
-    args.n_comp_pca = 350
+    args.train = 'train'  # 'train', 'pca'
+    args.johnsonsu = False
+    args.n_comp_pca = 100 #784 = full mnist/Fmnist
     args.add_noise = True
+    args.svd = True
 
     args.path = os.path.join('checkpoint', '{}{}_layers{}_h{}_flows{}{}_{}'.format(
         args.expname + ('_' if args.expname != '' else ''),
