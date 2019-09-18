@@ -10,8 +10,8 @@ import glob
 import scipy.stats
 
 ############################## MNIST vs fashion MNIST #############################################
-fnames_data = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-images.idx3-ubyte', r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
-fnames_labels = [r'C:\Users\justjo\Downloads\public_datasets/MNIST/train-labels.idx1-ubyte', r'C:\Users\justjo\Downloads\public_datasets/MNIST/t10k-labels.idx1-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/train-labels-idx1-ubyte', r'C:\Users\justjo\Downloads\public_datasets/FasionMNIST/t10k-labels-idx1-ubyte']
+fnames_data = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-images.idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-images-idx3-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-images-idx3-ubyte']
+fnames_labels = [r'C:\Users\just\Downloads\public_datasets/MNIST/train-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/MNIST/t10k-labels.idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/train-labels-idx1-ubyte', r'C:\Users\just\Downloads\public_datasets/FasionMNIST/t10k-labels-idx1-ubyte']
 
 def read_idx(filename):
     with open(filename, 'rb') as f:
@@ -24,6 +24,7 @@ for f in fnames_data:
     data.append(read_idx(f))
 data = np.concatenate(data)
 data = data.reshape((data.shape[0],-1))
+data = data/128 - 1
 
 labels = []
 for f in fnames_labels:
@@ -78,19 +79,21 @@ fnames_cifar = glob.glob(r'C:\Users\just\Downloads\public_datasets\cifar-10-pyth
 cifar10=[np.load(f, allow_pickle=True, encoding='latin1') for f in fnames_cifar]
 cifardata = np.concatenate([a['data'] for a in cifar10])
 cifarlabels = np.expand_dims(np.concatenate([a['labels'] for a in cifar10]), axis=1)
+cifardata = cifardata/128 - 1
 
 svhn = scipy.io.loadmat(r'C:\Users\just\Downloads\public_datasets\SVHN.mat')
 svhndata = np.moveaxis(svhn['X'],3,0)
 svhndata = np.reshape(svhndata, (svhndata.shape[0],-1))
+svhndata = svhndata/128 - 1
 # svhnlabels = svhn['y']
 
-data = np.concatenate([cifardata, svhndata], axis=0)
-labels = np.concatenate([cifarlabels, svhn['y']+10], axis=0)
+# data = np.concatenate([cifardata, svhndata], axis=0)
+# labels = np.concatenate([cifarlabels, svhn['y']+10], axis=0)
 
-arr = np.arange(data.shape[0])
-np.random.shuffle(arr)
-data = data[arr,]
-labels = labels[arr]
+# arr = np.arange(data.shape[0])
+# np.random.shuffle(arr)
+# data = data[arr,]
+# labels = labels[arr]
 
 ## UMAP
 embedding = umap.UMAP(n_neighbors=10,
@@ -100,8 +103,19 @@ embedding = umap.UMAP(n_neighbors=10,
 np.savetxt(r'C:\Users\just\Desktop\cifar_svhn_UMAP_embeddings.csv', np.concatenate([embedding,labels], axis=1), delimiter=',')
 
 ## PCA
-pca=sklearn.decomposition.PCA(n_components=10)
-pca.fit(data)
+pca=sklearn.decomposition.PCA(n_components=3072)
+pca.fit(cifardata)
+tscores = pca.score_samples(data)
 temp = pca.transform(data)
 
-np.savetxt(r'C:\Users\just\Desktop\cifar_svhn_PCA.csv', np.concatenate([temp,labels], axis=1), delimiter=',')
+## svd
+_, _, vh = scipy.linalg.svd(cifardata, full_matrices=False)
+data_train = np.matmul(cifardata, vh.T)[:,:100]
+data_test = np.matmul(svhndata, vh.T)[:,:100]
+
+data = np.concatenate([data_train, data_test], axis=0)
+labels = np.concatenate([cifarlabels, svhn['y']+10], axis=0)
+gmm = sklearn.mixture.GaussianMixture(5)
+gmm.fit(data_train)
+temp = gmm.score_samples(data)
+np.savetxt(r'C:\Users\just\Desktop\cifar_svhn_pca100_scores.csv', np.concatenate([np.expand_dims(temp, axis=1),labels], axis=1), delimiter=',')
